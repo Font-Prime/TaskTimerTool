@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101217">
+  <meta name="description" content="Track task time with persistent multi-timer control, history, and optional cloud sync.">
+  <title>Chronicle Timers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="eyebrow">Multi-platform time tracking</p>
+        <h1>Chronicle Timers</h1>
+        <p class="hero__lede">
+          Create named timers, run thousands in parallel, persist progress across browser restarts,
+          and build a real record of how your time gets spent.
+        </p>
+      </div>
+      <div class="hero__panel">
+        <div class="hero__metric"><span>Capacity</span><strong>2,015 live timers</strong></div>
+        <div class="hero__metric"><span>Per timer ceiling</span><strong>100,000 hours</strong></div>
+        <div class="hero__metric"><span>Storage</span><strong>Local by default, cloud optional</strong></div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="composer">
+        <div class="section-heading">
+          <p class="eyebrow">New timer</p>
+          <h2>Create a trackable task</h2>
+        </div>
+        <form id="timer-form" class="timer-form">
+          <label><span>Task name</span><input name="name" type="text" maxlength="80" placeholder="Deep work" required></label>
+          <label><span>Project</span><input name="project" type="text" maxlength="60" placeholder="Client Alpha"></label>
+          <label><span>Category</span><input name="category" type="text" maxlength="60" placeholder="Writing"></label>
+          <label><span>Tags</span><input name="tags" type="text" maxlength="120" placeholder="focus, billable, sprint-4"></label>
+          <label class="timer-form__notes"><span>Notes</span><textarea name="notes" rows="4" maxlength="600" placeholder="Optional context for this timer"></textarea></label>
+          <div class="timer-form__actions">
+            <button type="submit" class="button button--primary">Create timer</button>
+            <p id="timer-limit-note" class="inline-note">0 / 2,015 timers in use</p>
+          </div>
+        </form>
+      </section>
+
+      <section class="overview">
+        <div class="section-heading">
+          <p class="eyebrow">Overview</p>
+          <h2>Live reporting</h2>
+        </div>
+        <div id="overview-grid" class="overview-grid"></div>
+      </section>
+
+      <section class="controls-row">
+        <div class="filters">
+          <label class="search"><span class="sr-only">Search timers</span><input id="search-input" type="search" placeholder="Search task, project, category, notes, or tags"></label>
+          <select id="status-filter">
+            <option value="all">All statuses</option>
+            <option value="running">Running</option>
+            <option value="paused">Paused</option>
+            <option value="idle">Idle</option>
+          </select>
+          <select id="sort-select">
+            <option value="updated-desc">Recently changed</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="elapsed-desc">Most time logged</option>
+            <option value="project-asc">Project A-Z</option>
+          </select>
+        </div>
+        <div class="sync-controls">
+          <button id="backup-export" class="button button--ghost" type="button">Export backup</button>
+          <label class="button button--ghost button--file">Import backup<input id="backup-import" type="file" accept="application/json"></label>
+          <button id="sync-settings-toggle" class="button button--ghost" type="button">Sync settings</button>
+          <button id="sync-now" class="button button--primary" type="button">Sync now</button>
+        </div>
+      </section>
+
+      <section class="timers">
+        <div class="section-heading">
+          <p class="eyebrow">Workspace</p>
+          <h2>Your timers</h2>
+        </div>
+        <div id="timers-empty" class="empty-state" hidden>
+          <h3>No timers yet</h3>
+          <p>Create your first timer to start tracking how your time is actually being spent.</p>
+        </div>
+        <div id="timers-list" class="timers-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="sync-dialog" class="dialog">
+    <form method="dialog" class="dialog__panel">
+      <div class="dialog__header">
+        <div>
+          <p class="eyebrow">Optional cloud sync</p>
+          <h2>Supabase connection</h2>
+        </div>
+        <button type="submit" class="dialog__close" aria-label="Close sync settings">Close</button>
+      </div>
+      <p class="dialog__copy">Leave sync off for local-only use, or connect your own Supabase project to sync the full timer snapshot across devices.</p>
+      <label class="toggle"><input id="sync-enabled" type="checkbox"><span>Enable cloud sync</span></label>
+      <label><span>Project URL</span><input id="sync-url" type="url" placeholder="https://your-project.supabase.co"></label>
+      <label><span>Anon key</span><textarea id="sync-key" rows="3" placeholder="Paste your public anon key"></textarea></label>
+      <label><span>Profile ID</span><input id="sync-profile" type="text" maxlength="80" placeholder="default"></label>
+      <div class="dialog__note">
+        <p>SQL to run in Supabase:</p>
+        <pre>create table if not exists timer_snapshots (
+  profile_id text primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default timezone('utc', now())
+);</pre>
+      </div>
+      <menu class="dialog__actions"><button id="sync-save" type="button" class="button button--primary">Save sync settings</button></menu>
+    </form>
+  </dialog>
+
+  <template id="timer-card-template">
+    <article class="timer-card">
+      <div class="timer-card__header">
+        <div class="timer-card__title-wrap">
+          <input class="timer-card__title" data-field="name" type="text" maxlength="80">
+          <div class="timer-card__meta">
+            <span class="chip" data-role="project"></span>
+            <span class="chip chip--muted" data-role="category"></span>
+          </div>
+        </div>
+        <span class="status-badge" data-role="status"></span>
+      </div>
+      <div class="timer-card__clock">
+        <strong data-role="clock">00:00:00</strong>
+        <span data-role="hours-left"></span>
+      </div>
+      <div class="timer-card__fields">
+        <label><span>Project</span><input data-field="project" type="text" maxlength="60" placeholder="Project"></label>
+        <label><span>Category</span><input data-field="category" type="text" maxlength="60" placeholder="Category"></label>
+        <label><span>Tags</span><input data-field="tags" type="text" maxlength="120" placeholder="Comma separated tags"></label>
+        <label class="timer-card__notes"><span>Notes</span><textarea data-field="notes" rows="3" maxlength="600" placeholder="What is this timer for?"></textarea></label>
+      </div>
+      <div class="timer-card__actions">
+        <button class="button button--primary" data-action="start" type="button">Start</button>
+        <button class="button button--ghost" data-action="pause" type="button">Pause</button>
+        <button class="button button--ghost" data-action="resume" type="button">Resume</button>
+        <button class="button button--ghost" data-action="stop" type="button">Stop</button>
+        <button class="button button--ghost" data-action="adjust" type="button">Adjust time</button>
+        <button class="button button--ghost" data-action="reset" type="button">Reset</button>
+        <button class="button button--ghost button--danger" data-action="delete" type="button">Delete</button>
+      </div>
+      <div class="timer-card__history">
+        <div class="history-heading"><h3>Recent sessions</h3><span data-role="history-count"></span></div>
+        <ul data-role="history-list"></ul>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
