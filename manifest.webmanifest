@@ -1,0 +1,10 @@
+{
+  "name": "Chronicle Timers",
+  "short_name": "Chronicle",
+  "description": "Persistent task timer tracking with history, reporting, backup, and optional cloud sync.",
+  "display": "standalone",
+  "start_url": "./index.html",
+  "background_color": "#101217",
+  "theme_color": "#101217",
+  "icons": []
+}
